@@ -1,38 +1,61 @@
+import os
 import urllib.request
 from urllib.request import urlopen
 import webbrowser
 import mysql.connector
+from dotenv import load_dotenv
 
+# Load environment variables from .env file
+load_dotenv()
 
-def to_list(listoftup):
-    if len(listoftup) == 1:
-        return list(listoftup)
-    tables = list(map(lambda x: list(x), listoftup))
-    return list(map(lambda x: str(x)[2:-2], tables))
-
-
-def link_open(link):
-    weburl = urllib.request.urlopen(link)
-    url = weburl.geturl()
-    webbrowser.open_new(url)
-    urlopen(url=url)
-
-
-def main(site_name):
-    mycur.execute(f"select site from links where id = '{site_name}'")
-    link = mycur.fetchone()
-    # print(link)
-    print(f"opening {site_name}")
-    link_open(*to_list(link))
-
-
-mydb = mysql.connector.connect(host="localhost", user="root", password="69775rootpass", database="cluster")
+# Database connection details
+mydb = mysql.connector.connect(
+    host=os.getenv("DB_HOST"),
+    user=os.getenv("DB_USER"),
+    password=os.getenv("DB_PASSWORD"),
+    database=os.getenv("DB_NAME")
+)
 mycur = mydb.cursor()
 
+def to_list(listoftup):
+    """Converts a list of tuples to a list of strings."""
+    if len(listoftup) == 1:
+        return list(listoftup[0])  
+    return [item[0] for item in listoftup] 
+
+def link_open(link):
+    """Opens the given link in a web browser."""
+    try:
+        weburl = urllib.request.urlopen(link)
+        url = weburl.geturl()
+        webbrowser.open_new(url)
+        urlopen(url=url)
+    except urllib.error.URLError as e:
+        print(f"Error opening URL: {e}")
+
+def main(site_name):
+    """Fetches the site URL from the database and opens it."""
+    try:
+        mycur.execute(f"SELECT site FROM links WHERE id = '{site_name}'")
+        link = mycur.fetchone()
+        if link:
+            print(f"Opening {site_name}")
+            link_open(link[0]) 
+        else:
+            print(f"Site '{site_name}' not found in the database.")
+    except mysql.connector.Error as e:
+        print(f"Database error: {e}")
+
 if __name__ == "__main__":
-    print("enter the site you want to open: ")
-    print('your options are:')
-    mycur.execute("select id from links ")
-    opt = mycur.fetchall()
-    print(to_list(opt))
-    main(input("select your choice: ").strip().lower())
+    print("Enter the site you want to open:")
+    try:
+        mycur.execute("SELECT id FROM links")
+        options = to_list(mycur.fetchall())
+        if options:
+            print("Your options are:", ", ".join(options)) 
+            site_name = input("Select your choice: ").strip().lower()
+            main(site_name)
+        else:
+            print("No sites found in the database.")
+    except mysql.connector.Error as e:
+        print(f"Database error: {e}")

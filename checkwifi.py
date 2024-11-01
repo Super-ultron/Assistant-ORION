@@ -1,81 +1,72 @@
+import os
 import psutil
-from psutil import AF_LINK
 import requests
 import subprocess
 import time
-from selenium.webdriver.common.by import By
 from selenium import webdriver
+from selenium.webdriver.common.by import By
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 def connect():
-    chromedriver = "D:\\extras\\msedgedriver.exe"
+    """Connects to the Wi-Fi network using the credentials from the .env file."""
+    chromedriver = "D:\\extras\\msedgedriver.exe"  # Replace with your actual chromedriver path
     driver = webdriver.Edge(chromedriver)
     driver.get("http://172.16.16.16/24online/webpages/client.jsp")
     user = driver.find_element(By.NAME, "username")
-    user.send_keys("E22CSEU0788@bennett.edu.in")
-
+    user.send_keys(os.getenv("WIFI_USERNAME"))  # Get username from environment variables
     password = driver.find_element(By.NAME, "password")
-    password.send_keys("Bennett@#8929342373")
+    password.send_keys(os.getenv("WIFI_PASSWORD"))  # Get password from environment variables
     driver.find_element(By.NAME, "login").click()
-
     driver.close()
 
-
 def is_wifi_connected():
-    # Get the list of all network interfaces
-    interfaces = psutil.net_if_addrs()
-    for interface in interfaces:
-        # Check if the interface is a Wi-Fi interface
-        if "Wi-Fi" in interface or "Wireless" in interface:
-            # Get the list of addresses associated with the interface
-            addresses = interfaces[interface]
-            # Iterate through the list of addresses
-            for address in addresses:
-                # Check if the address is a valid IPv4 address
-                if address.family == psutil.AF_LINK:
-                    # Return True if the interface is up and has a valid IPv4 address
-                    if psutil.net_if_stats()[interface].isup:
+    """Checks if the device is connected to a Wi-Fi network."""
+    try:
+        # Use psutil to get a list of network interfaces
+        interfaces = psutil.net_if_addrs()
+        for interface_name, addresses in interfaces.items():
+            # Check if the interface is a Wi-Fi interface and has a valid IPv4 address
+            if "Wi-Fi" in interface_name or "Wireless" in interface_name:
+                for address in addresses:
+                    if address.family == psutil.AF_LINK and psutil.net_if_stats()[interface_name].isup:
                         return True
-    # Return False if no Wi-Fi interface was found or if the Wi-Fi interface was not up
+    except Exception as e:
+        print(f"Error checking Wi-Fi connection: {e}")
     return False
-
 
 def has_internet_connection():
+    """Checks if the device has an active internet connection."""
     try:
-        # Send an HTTP request to a website and check if the request is successful
-        response = requests.get("https://www.youtube.com/")
-        if response.status_code == 200:
-            return True
-    except:
-        pass
-    return False
-
-
-def is_stud():
-    wifi = subprocess.check_output(['netsh', 'WLAN', 'show', 'interfaces'])
-    data = wifi.decode('utf-8')
-    # print(data)
-    if "STUD" in data:
-        # print("connected to stud wi-fi")
+        # Try to reach a reliable website like google.com
+        response = requests.get("https://www.google.com/", timeout=5)
+        response.raise_for_status()  # Raise an exception for bad status codes
         return True
-    else:
-        # print("not connected to stud wi-fi")
+    except requests.exceptions.RequestException as e:
+        print(f"Error checking internet connection: {e}")
         return False
 
+def is_stud():
+    """Checks if the device is connected to the 'STUD' Wi-Fi network."""
+    try:
+        name = "STUD" # Replace with your wifi name
+        wifi = subprocess.check_output(['netsh', 'WLAN', 'show', 'interfaces'])
+        data = wifi.decode('utf-8')
+        return name in data
+    except Exception as e:
+        print(f"Error checking Wi-Fi SSID: {e}")
+        return False
 
 if __name__ == "__main__":
     while True:
-        if not(has_internet_connection()):
-            if is_wifi_connected():
-                pass
-                # print("Wi-Fi is connected")
-                if is_stud():
-                    connect()
-        time.sleep(30)
-
-
-
-
-
-
-
-
+        try:
+            if not has_internet_connection():
+                if is_wifi_connected():
+                    if is_stud():
+                        connect()
+            time.sleep(30)
+        except Exception as e:
+            print(f"An unexpected error occurred: {e}")
+            time.sleep(60)  # Wait longer before retrying in case of unexpected errors
